@@ -1,0 +1,37 @@
+{
+  "slug": "__SLUG__",
+  "type": "turnos",
+  "name": "Nombre del negocio",
+  "tagline": "Una frase corta que lo describa.",
+  "logo": "/tenants/__SLUG__/logo.svg",
+  "colors": { "primary": "#1f2937", "accent": "#f59e0b" },
+  "whatsapp": "5493810000000",
+  "adminPin": "1234",
+  "slotStepMin": 15,
+  "bookingWindowDays": 14,
+  "showPrices": true,
+  "sedes": [
+    {
+      "id": "principal",
+      "name": "Sede principal",
+      "address": "Calle 123, San Miguel de Tucumán",
+      "hours": {
+        "0": null,
+        "1": { "open": "09:00", "close": "19:00" },
+        "2": { "open": "09:00", "close": "19:00" },
+        "3": { "open": "09:00", "close": "19:00" },
+        "4": { "open": "09:00", "close": "19:00" },
+        "5": { "open": "09:00", "close": "19:00" },
+        "6": { "open": "09:00", "close": "13:00" }
+      }
+    }
+  ],
+  "profesionales": [
+    { "id": "profesional-1", "name": "Profesional 1", "sedeIds": ["principal"], "servicioIds": ["servicio-1"] },
+    { "id": "profesional-2", "name": "Profesional 2", "sedeIds": ["principal"], "servicioIds": ["servicio-1", "servicio-2"] }
+  ],
+  "servicios": [
+    { "id": "servicio-1", "name": "Servicio 1", "durationMin": 30, "price": 10000, "description": "Descripción opcional." },
+    { "id": "servicio-2", "name": "Servicio 2", "durationMin": 60, "price": 18000 }
+  ]
+}

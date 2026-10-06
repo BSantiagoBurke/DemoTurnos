@@ -1,0 +1,43 @@
+{
+  "slug": "estetica-demo",
+  "type": "turnos",
+  "name": "Calma Estética",
+  "tagline": "Tu momento de cuidado, a un toque.",
+  "logo": "/tenants/estetica-demo/logo.svg",
+  "colors": { "primary": "#9d4b73", "accent": "#f4d6e4" },
+  "whatsapp": "5493810000000",
+  "adminPin": "1234",
+  "slotStepMin": 15,
+  "bookingWindowDays": 21,
+  "showPrices": true,
+  "sedes": [
+    {
+      "id": "principal",
+      "name": "Calma Estética",
+      "address": "Av. Mate de Luna 2300, San Miguel de Tucumán",
+      "hours": {
+        "0": null,
+        "1": { "open": "09:00", "close": "19:00" },
+        "2": { "open": "09:00", "close": "19:00" },
+        "3": { "open": "09:00", "close": "19:00" },
+        "4": { "open": "09:00", "close": "19:00" },
+        "5": { "open": "09:00", "close": "19:00" },
+        "6": { "open": "09:00", "close": "13:00" }
+      }
+    }
+  ],
+  "profesionales": [
+    { "id": "lucia", "name": "Lucía Paz", "sedeIds": ["principal"], "servicioIds": ["limpieza-facial", "peeling", "cejas"] },
+    { "id": "carla", "name": "Carla Ruiz", "sedeIds": ["principal"], "servicioIds": ["manicura", "pedicura", "cejas"] },
+    { "id": "sofia", "name": "Sofía Díaz", "sedeIds": ["principal"], "servicioIds": ["masaje", "depilacion", "limpieza-facial"] }
+  ],
+  "servicios": [
+    { "id": "limpieza-facial", "name": "Limpieza facial profunda", "durationMin": 60, "price": 22000, "description": "Higiene, extracción e hidratación según tu tipo de piel." },
+    { "id": "peeling", "name": "Peeling químico", "durationMin": 45, "price": 28000 },
+    { "id": "manicura", "name": "Manicura semipermanente", "durationMin": 45, "price": 14000 },
+    { "id": "pedicura", "name": "Pedicura spa", "durationMin": 60, "price": 16000 },
+    { "id": "masaje", "name": "Masaje descontracturante", "durationMin": 90, "price": 30000, "description": "Espalda, cuello y piernas." },
+    { "id": "depilacion", "name": "Depilación definitiva (zona)", "durationMin": 30, "price": 12000 },
+    { "id": "cejas", "name": "Perfilado de cejas", "durationMin": 20, "price": 7000 }
+  ]
+}

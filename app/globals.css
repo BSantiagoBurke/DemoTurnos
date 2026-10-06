@@ -1,26 +1,52 @@
 @import "tailwindcss";
 
+/*
+ * Colores del tenant: se inyectan como CSS variables en el contenedor de cada negocio
+ * (ver lib/color.ts). Estos son los valores por defecto.
+ */
+@theme {
+  --color-primary: #1f2937;
+  --color-on-primary: #ffffff;
+  --color-accent: #f59e0b;
+  --color-on-accent: #111827;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* Foco visible y consistente en todos los controles. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+dialog::backdrop {
+  background: rgb(15 23 42 / 0.55);
+}
+
+.bg-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #e2e8f0 0 8px,
+    #f1f5f9 8px 16px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

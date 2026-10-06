@@ -1,0 +1,56 @@
+{
+  "slug": "barberia-demo",
+  "type": "turnos",
+  "name": "Barbería Torno",
+  "tagline": "Cortes clásicos y modernos, sin esperas.",
+  "logo": "/tenants/barberia-demo/logo.svg",
+  "colors": { "primary": "#1c1917", "accent": "#d97706" },
+  "whatsapp": "5493810000000",
+  "adminPin": "1234",
+  "slotStepMin": 15,
+  "bookingWindowDays": 14,
+  "showPrices": true,
+  "sedes": [
+    {
+      "id": "centro",
+      "name": "Sede Centro",
+      "address": "25 de Mayo 450, San Miguel de Tucumán",
+      "hours": {
+        "0": null,
+        "1": { "open": "09:00", "close": "20:00" },
+        "2": { "open": "09:00", "close": "20:00" },
+        "3": { "open": "09:00", "close": "20:00" },
+        "4": { "open": "09:00", "close": "20:00" },
+        "5": { "open": "09:00", "close": "20:00" },
+        "6": { "open": "09:00", "close": "14:00" }
+      }
+    },
+    {
+      "id": "yerba-buena",
+      "name": "Sede Yerba Buena",
+      "address": "Av. Aconquija 1800, Yerba Buena",
+      "hours": {
+        "0": null,
+        "1": null,
+        "2": { "open": "10:00", "close": "20:30" },
+        "3": { "open": "10:00", "close": "20:30" },
+        "4": { "open": "10:00", "close": "20:30" },
+        "5": { "open": "10:00", "close": "20:30" },
+        "6": { "open": "10:00", "close": "18:00" }
+      }
+    }
+  ],
+  "profesionales": [
+    { "id": "nico", "name": "Nico", "sedeIds": ["centro"], "servicioIds": ["corte", "corte-barba", "barba", "nino"] },
+    { "id": "facu", "name": "Facu", "sedeIds": ["centro", "yerba-buena"], "servicioIds": ["corte", "corte-barba", "barba", "color"] },
+    { "id": "mati", "name": "Mati", "sedeIds": ["yerba-buena"], "servicioIds": ["corte", "corte-barba", "barba", "nino"] },
+    { "id": "juli", "name": "Juli", "sedeIds": ["centro"], "servicioIds": ["corte", "color", "nino"] }
+  ],
+  "servicios": [
+    { "id": "corte", "name": "Corte", "durationMin": 30, "price": 9000, "description": "Corte a tijera o máquina, con lavado." },
+    { "id": "corte-barba", "name": "Corte + barba", "durationMin": 45, "price": 13000, "description": "Corte completo y perfilado de barba con toalla caliente." },
+    { "id": "barba", "name": "Barba", "durationMin": 20, "price": 6000, "description": "Perfilado y arreglo de barba." },
+    { "id": "nino", "name": "Corte niño", "durationMin": 30, "price": 7000, "description": "Hasta 12 años." },
+    { "id": "color", "name": "Color / mechas", "durationMin": 60, "price": 18000 }
+  ]
+}
