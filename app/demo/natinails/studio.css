@@ -1,0 +1,65 @@
+/* Tema de la plantilla "estudio". Los colores llegan como CSS variables desde la config. */
+
+html:has(.studio-root),
+html:has(.studio-root) body {
+  background: var(--st-page-bg, #0e0e0f);
+  color-scheme: dark;
+}
+
+.studio-root {
+  --st-error: #ff8fa3;
+  background: var(--st-bg);
+  color: var(--st-text);
+  font-family: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.studio-root .st-display {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.studio-root .st-btn {
+  background: var(--st-accent);
+  color: var(--st-on-accent);
+  box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--st-accent) 70%, transparent);
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+.studio-root .st-btn:active {
+  transform: scale(0.98);
+  filter: brightness(0.95);
+}
+
+.studio-root .st-glow {
+  background: radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--st-accent) 55%, transparent), transparent 65%);
+  filter: blur(8px);
+  opacity: 0.55;
+}
+
+.studio-root .st-input {
+  width: 100%;
+  min-height: 3.25rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--st-border);
+  background: var(--st-surface);
+  color: var(--st-text);
+  padding: 0 1rem;
+  font-size: 1.0625rem; /* 17px: evita el zoom automático de iOS */
+}
+.studio-root .st-input::placeholder {
+  color: var(--st-muted);
+  opacity: 0.7;
+}
+.studio-root .st-input[aria-invalid="true"] {
+  border-color: var(--st-error);
+}
+
+.studio-root .st-check {
+  accent-color: var(--st-accent);
+}
+
+.studio-root :where(a, button, input, [tabindex]):focus-visible {
+  outline: 3px solid var(--st-text);
+  outline-offset: 2px;
+}

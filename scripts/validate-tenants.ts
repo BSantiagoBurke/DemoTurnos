@@ -4,7 +4,9 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { studioDemos } from "../demos";
 import { contrastRatio } from "../lib/color";
+import { validateStudioDemo } from "../lib/studio/schema";
 import { validateTenant } from "../lib/tenant-schema";
 
 const root = process.cwd();
@@ -47,8 +49,29 @@ for (const file of files) {
   warnings.forEach((w) => console.warn(`  ⚠ ${w}`));
 }
 
+// Demos con plantilla "estudio" (demos/*.ts, ruta /demo/<slug>).
+const studioSlugs = new Set<string>();
+for (const demo of studioDemos) {
+  const label = `demos/${demo.slug}.ts`;
+  const result = validateStudioDemo(demo);
+  const errors = result.ok ? [] : [...result.errors];
+  if (studioSlugs.has(demo.slug)) errors.push(`slug repetido "${demo.slug}"`);
+  studioSlugs.add(demo.slug);
+  if (!fs.existsSync(path.join(root, "app", "demo", demo.slug, "page.tsx"))) {
+    errors.push(`falta la ruta app/demo/${demo.slug}/page.tsx`);
+  }
+  if (errors.length > 0) {
+    failed++;
+    console.error(`✖ ${label}\n${errors.map((e) => `  - ${e}`).join("\n")}`);
+  } else {
+    console.log(`✔ ${label}`);
+  }
+  result.warnings.forEach((w) => console.warn(`  ⚠ ${w}`));
+}
+
+const total = files.length + studioDemos.length;
 if (failed > 0) {
-  console.error(`\n${failed} de ${files.length} tenants con errores.`);
+  console.error(`\n${failed} de ${total} demos con errores.`);
   process.exit(1);
 }
-console.log(`\nTodos los tenants son válidos (${files.length}).`);
+console.log(`\nTodas las demos son válidas (${files.length} tenants + ${studioDemos.length} estudio).`);

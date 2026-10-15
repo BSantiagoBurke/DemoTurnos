@@ -19,6 +19,8 @@ Next.js 16 (App Router) · TypeScript estricto · Tailwind CSS 4 · date-fns + d
 | `/turnos/[slug]/reservar` | Flujo de reserva: servicio, sede, profesional, fecha, horario, datos y confirmación (.ics + WhatsApp). |
 | `/turnos/[slug]/admin` | Panel del dueño con PIN de demo: agenda del día y de la semana, acciones, bloqueos, contadores y "Reiniciar demo". |
 
+| `/demo/natinails` | Demo personalizada de Nati Nails 2.0 con la plantilla "estudio" (ver abajo). |
+
 Un slug que no existe en `tenants/` da 404. Todas las páginas tienen `noindex, nofollow` (meta, header `X-Robots-Tag` y `robots.txt`).
 
 Tenants de ejemplo (PIN `1234`):
@@ -130,3 +132,16 @@ Autenticación real, backend o base de datos, pagos o señas, recordatorios auto
 ---
 
 Hecho por [BeeCode](https://beecodelab.com).
+
+
+## Plantilla "estudio" (`/demo/<slug>`)
+
+Para negocios donde la clienta elige **sede primero** y no hace falta elegir profesional (estudios de uñas, por ejemplo). Primera demo: `/demo/natinails`.
+
+- **Config:** `demos/<slug>.ts`, tipada y validada con zod (`lib/studio/schema.ts`): nombre, textos de portada, rating público (opcional), Instagram, WhatsApp, colores (se valida el contraste AA), reserva (días visibles, bloque, anticipación), sedes con horario y `horarioAConfirmar`, categorías con servicios (`ejemplo: true` mientras no estén confirmados), extras que suman minutos (`soloCategorias` para limitarlos) y textos de Open Graph.
+- **Registro:** agregar la config en `demos/index.ts`. `npm run validate-tenants` la valida y exige que exista `app/demo/<slug>/page.tsx`.
+- **Ruta:** copiar `app/demo/natinails/` (layout con fuentes y colores, página, `opengraph-image.tsx` e `icon.svg`).
+- **Flujo:** portada → sede (con "Cómo llegar") → servicio → extras → día y horario (14 días, bloques de 30 min, según la duración total) → datos (nombre y WhatsApp argentino) → resumen y "Confirmar por WhatsApp". El paso va en la URL (`?paso=...`), así el "atrás" del celular vuelve un paso.
+- **Datos:** todo en memoria. Los horarios ocupados de ejemplo salen de `lib/studio/busy.ts` (determinísticos por sede y día; `ocupacionEjemplo` regula cuántos).
+- **Open Graph:** la imagen se genera con `next/og`. Para que WhatsApp muestre la vista previa, la URL tiene que ser absoluta: se toma de `NEXT_PUBLIC_SITE_URL` o, en Vercel, del dominio de producción.
+- **Fuentes:** Syne (títulos) y Manrope (texto), de Google Fonts con licencia OFL, servidas desde `assets/fonts` para que el build no dependa de la red.
