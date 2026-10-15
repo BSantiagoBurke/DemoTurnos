@@ -100,7 +100,7 @@ export type ConfirmMessageInput = {
 };
 
 export function buildConfirmMessage(i: ConfirmMessageInput): string {
-  return `Hola! Quiero confirmar mi turno en la sede ${i.sede}: ${i.servicio} el ${i.dia} a las ${i.hora}. Soy ${i.nombre}.`;
+  return `Hola! Reservé mi turno por la web en la sede ${i.sede}: ${i.servicio} el ${i.dia} a las ${i.hora}. Soy ${i.nombre}.`;
 }
 
 export function mapsUrl(direccion: string): string {

@@ -69,6 +69,8 @@ export type StudioDemoConfig = {
   rating?: { valor: number; resenas: number; fuente: string };
   instagram?: { usuario: string; url: string };
   whatsapp: string; // 549 + área + número
+  /** PIN del panel de demo (no es autenticación real). */
+  adminPin: string;
   colores: StudioColores;
   reserva: {
     diasVisibles: number;
@@ -82,4 +84,35 @@ export type StudioDemoConfig = {
   og: { titulo: string; descripcion: string };
   /** Texto chico al pie, obligatorio en las demos. */
   avisoDemo: string;
+};
+
+export type StudioBookingStatus = "confirmado" | "atendido" | "cancelado";
+
+/** Turno guardado. Fecha y hora en la zona del negocio (America/Argentina/Tucuman). */
+export type StudioBooking = {
+  id: string;
+  slug: string;
+  sedeId: string;
+  servicioId: string;
+  extraIds: string[];
+  date: string; // yyyy-MM-dd
+  time: string; // HH:mm
+  durationMin: number;
+  nombre: string;
+  telefono: string; // 549...
+  status: StudioBookingStatus;
+  /** "web": reservado desde la página. "ejemplo": dato inventado para la demo. */
+  origen: "web" | "ejemplo";
+  createdAt: string; // ISO
+};
+
+/** Horario bloqueado por el estudio en una sede (almuerzo, curso, etc.). */
+export type StudioBlock = {
+  id: string;
+  slug: string;
+  sedeId: string;
+  date: string;
+  start: string; // HH:mm
+  end: string; // HH:mm
+  motivo?: string;
 };

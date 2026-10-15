@@ -14,8 +14,10 @@ import {
   slotsForDate,
   totalDuration,
 } from "@/lib/studio/booking";
-import { exampleBusy } from "@/lib/studio/busy";
-import type { StudioDemoConfig } from "@/lib/studio/types";
+import { busyIntervals } from "@/lib/studio/agenda";
+import { SlotTakenError } from "@/lib/studio/repository";
+import { useStudioData } from "@/lib/studio/useStudioData";
+import type { StudioBooking as StudioBookingRecord, StudioDemoConfig } from "@/lib/studio/types";
 import { useNow } from "@/lib/hooks/useNow";
 import { formatArgentinePhone } from "@/lib/phone";
 import { timeToMinutes, toLocalDate, toLocalTime, type LocalDate } from "@/lib/time";
@@ -24,9 +26,11 @@ import { NNMonogram } from "./NNMonogram";
 import { StudioFooter } from "./StudioFooter";
 import { AgendaStep, DatosStep, ExtrasStep, PrimaryButton, Resumen, SedeStep, ServicioStep } from "./StudioSteps";
 
-type Step = "portada" | "sede" | "servicio" | "extras" | "agenda" | "datos" | "confirmacion";
+type Step = "portada" | "sede" | "servicio" | "extras" | "agenda" | "datos" | "confirmacion" | "listo";
 
-const FLOW: Exclude<Step, "portada">[] = ["sede", "servicio", "extras", "agenda", "datos", "confirmacion"];
+const FLOW: Exclude<Step, "portada">[] = ["sede", "servicio", "extras", "agenda", "datos", "confirmacion", "listo"];
+/** Pasos que cuentan en la barra de progreso ("listo" es la pantalla final). */
+const PROGRESS = FLOW.length - 1;
 
 const TITLES: Record<Exclude<Step, "portada">, string> = {
   sede: "¿En qué sede?",
@@ -35,6 +39,7 @@ const TITLES: Record<Exclude<Step, "portada">, string> = {
   agenda: "Elegí día y horario",
   datos: "Tus datos",
   confirmacion: "Revisá y confirmá",
+  listo: "¡Turno reservado!",
 };
 
 export function StudioBooking({ config }: { config: StudioDemoConfig }) {
@@ -48,6 +53,10 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
   const [date, setDate] = useState<LocalDate | null>(null);
   const [time, setTime] = useState<string | null>(null);
   const [cliente, setCliente] = useState({ nombre: "", telefono: "" });
+  const [booked, setBooked] = useState<StudioBookingRecord | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { bookings, blocks, loaded, repository, refresh } = useStudioData(config);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const now = useNow();
 
@@ -65,6 +74,7 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
       ["servicio", !!servicio],
       ["agenda", !!date && !!time],
       ["datos", !!cliente.nombre],
+      ["confirmacion", !!booked],
     ];
     for (const [s, ok] of need) if (!ok && pos(requestedStep) > pos(s)) return s;
     return requestedStep;
@@ -84,7 +94,7 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
   const nowMin = now ? timeToMinutes(toLocalTime(now)) : 0;
 
   const agendaBase =
-    sede && servicio && today
+    sede && servicio && today && loaded
       ? {
           sede,
           durationMin: duration,
@@ -96,7 +106,7 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
         }
       : null;
 
-  const busyFor = (d: LocalDate) => (sede ? exampleBusy(config.slug, sede, d, config.reserva.bloqueMin) : []);
+  const busyFor = (d: LocalDate) => (sede ? busyIntervals(bookings, blocks, sede.id, d) : []);
   const days = agendaBase ? dayOptions({ ...agendaBase, days: config.reserva.diasVisibles, busyFor }) : [];
 
   // Día elegido; si no hay ninguno (o dejó de tener lugar), el primero con horarios libres.
@@ -130,7 +140,39 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
         )
       : null;
 
+  const confirmar = async () => {
+    if (!sede || !servicio || !date || !time) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const b = await repository.create({
+        sedeId: sede.id,
+        servicioId: servicio.id,
+        extraIds: extras.map((e) => e.id),
+        date,
+        time,
+        durationMin: duration,
+        nombre: cliente.nombre,
+        telefono: cliente.telefono,
+      });
+      setBooked(b);
+      await refresh();
+      // Se reemplaza la entrada del historial: volver atrás no repite la confirmación.
+      window.history.replaceState(null, "", "?paso=listo");
+    } catch (e) {
+      if (!(e instanceof SlotTakenError)) throw e;
+      await refresh();
+      setTime(null);
+      setError("Ese horario se acaba de ocupar. Elegí otro, por favor.");
+      go("agenda");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const restart = () => {
+    setBooked(null);
+    setError(null);
     setSedeId(null);
     setServicioId(null);
     setExtraIds([]);
@@ -199,6 +241,11 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
               {sede?.nombre} · {servicio ? servicioLabel(servicio, extras) : ""} ·{" "}
               <strong className="text-(--st-text)">{formatMinutes(duration)}</strong>
             </p>
+            {error ? (
+              <p role="alert" className="mb-4 rounded-xl border border-(--st-error) px-3 py-2 text-sm text-(--st-error)">
+                {error}
+              </p>
+            ) : null}
             {sede?.horarioAConfirmar ? (
               <p className="mb-4 rounded-xl border border-(--st-border) px-3 py-2 text-xs text-(--st-muted)">
                 Horario de esta sede a confirmar. Mientras tanto usamos el de San Martín.
@@ -213,6 +260,7 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
                 setTime(null);
               }}
               onSelectSlot={(t) => {
+                setError(null);
                 setDate(selectedDay);
                 setTime(t);
                 go("datos");
@@ -234,19 +282,55 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
       case "confirmacion":
         return (
           <div className="space-y-5">
-            <Resumen rows={[...resumenRows, { label: "A nombre de", value: cliente.nombre }, { label: "WhatsApp", value: formatArgentinePhone(cliente.telefono) }]} />
+            <Resumen
+              rows={[
+                ...resumenRows,
+                { label: "A nombre de", value: cliente.nombre },
+                { label: "WhatsApp", value: formatArgentinePhone(cliente.telefono) },
+              ]}
+            />
+            <PrimaryButton type="button" onClick={confirmar} disabled={saving} aria-busy={saving}>
+              {saving ? "Reservando…" : "Confirmar turno"}
+            </PrimaryButton>
+            <p className="text-center text-sm text-(--st-muted)">El horario queda reservado al confirmar.</p>
+          </div>
+        );
+      case "listo":
+        return (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3">
+              <span className="st-btn flex size-12 shrink-0 items-center justify-center rounded-full">
+                <Icon name="check" className="size-7" />
+              </span>
+              <p className="text-lg">
+                <strong>¡Listo, {cliente.nombre}!</strong>
+                <br />
+                <span className="text-(--st-muted)">Tu turno quedó reservado.</span>
+              </p>
+            </div>
+            <Resumen rows={resumenRows} />
             {whatsappHref ? (
-              <a href={whatsappHref} target="_blank" rel="noopener" className="st-btn flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl px-6 text-lg font-bold">
-                <Icon name="whatsapp" className="size-6" />
-                Confirmar por WhatsApp
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noopener"
+                className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-(--st-border) bg-(--st-surface) px-6 text-base font-semibold"
+              >
+                <Icon name="whatsapp" className="size-5" />
+                Avisar por WhatsApp (opcional)
               </a>
             ) : null}
-            <p className="text-center text-sm text-(--st-muted)">
-              Se abre WhatsApp con el mensaje listo. El estudio te responde para confirmar.
-            </p>
             <button type="button" onClick={restart} className="mx-auto block min-h-11 px-4 text-sm font-semibold underline underline-offset-4">
               Hacer otra reserva
             </button>
+            <div className="rounded-2xl border border-dashed border-(--st-accent) p-4 text-sm">
+              <p className="font-semibold">Para la demo</p>
+              <p className="mt-1 text-(--st-muted)">Así le llega este turno al estudio, ordenado por sede.</p>
+              <a href={`/demo/${config.slug}/panel`} className="mt-3 inline-flex min-h-11 items-center gap-1 font-semibold underline decoration-(--st-accent) decoration-2 underline-offset-4">
+                Ver cómo lo recibe Nati
+                <Icon name="chevronRight" className="size-4" />
+              </a>
+            </div>
           </div>
         );
     }
@@ -258,9 +342,9 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => window.history.back()}
+            onClick={() => (step === "listo" ? restart() : window.history.back())}
             className="-ml-2 inline-flex size-11 items-center justify-center rounded-full hover:bg-(--st-surface)"
-            aria-label="Volver"
+            aria-label={step === "listo" ? "Hacer otra reserva" : "Volver"}
           >
             <Icon name="back" className="size-6" />
           </button>
@@ -268,16 +352,18 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
           <p className="st-display truncate text-base">{config.nombre}</p>
         </div>
 
-        <div className="mt-4" role="progressbar" aria-label="Progreso de la reserva" aria-valuemin={1} aria-valuemax={FLOW.length} aria-valuenow={index + 1}>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-(--st-muted)">
-            Paso {index + 1} de {FLOW.length}
-          </p>
-          <div className="mt-2 flex gap-1.5">
-            {FLOW.map((s, i) => (
-              <span key={s} className={`h-1 flex-1 rounded-full ${i <= index ? "bg-(--st-accent)" : "bg-(--st-border)"}`} />
-            ))}
+        {step !== "listo" ? (
+          <div className="mt-4" role="progressbar" aria-label="Progreso de la reserva" aria-valuemin={1} aria-valuemax={PROGRESS} aria-valuenow={index + 1}>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-(--st-muted)">
+              Paso {index + 1} de {PROGRESS}
+            </p>
+            <div className="mt-2 flex gap-1.5">
+              {FLOW.slice(0, PROGRESS).map((s, i) => (
+                <span key={s} className={`h-1 flex-1 rounded-full ${i <= index ? "bg-(--st-accent)" : "bg-(--st-border)"}`} />
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <h1 ref={headingRef} tabIndex={-1} className="st-display mb-5 mt-6 text-[2rem] leading-[1.05] outline-none">
           {TITLES[step]}
@@ -326,7 +412,7 @@ export function Portada({ config, onStart }: { config: StudioDemoConfig; onStart
             </li>
           ))}
         </ol>
-        <p className="relative mt-3 text-center text-sm text-(--st-muted)">Confirmás por WhatsApp en un toque.</p>
+        <p className="relative mt-3 text-center text-sm text-(--st-muted)">Tu turno queda reservado al instante.</p>
 
         <div className="relative mt-8">
           <PrimaryButton type="button" onClick={onStart}>

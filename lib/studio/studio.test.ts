@@ -154,7 +154,7 @@ describe("mensaje de WhatsApp", () => {
       nombre: "Sofía",
     });
     expect(text).toBe(
-      "Hola! Quiero confirmar mi turno en la sede Marcos Paz 717: Kapping en gel + Nail art el viernes 16/10 a las 10:30. Soy Sofía.",
+      "Hola! Reservé mi turno por la web en la sede Marcos Paz 717: Kapping en gel + Nail art el viernes 16/10 a las 10:30. Soy Sofía.",
     );
   });
 

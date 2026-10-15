@@ -29,6 +29,7 @@ export const studioDemoSchema = z
       .optional(),
     instagram: z.object({ usuario: z.string().min(1), url: z.url() }).optional(),
     whatsapp: z.string().regex(/^549\d{10}$/, "Formato 549 + área + número, sin + ni espacios"),
+    adminPin: z.string().regex(/^\d{4,6}$/, "PIN de 4 a 6 dígitos"),
     colores: z.object({
       fondo: hex,
       superficie: hex,

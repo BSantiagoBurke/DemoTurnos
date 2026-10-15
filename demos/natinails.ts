@@ -25,6 +25,7 @@ export const natinails: StudioDemoConfig = {
   rating: { valor: 4.9, resenas: 72, fuente: "Google Maps" },
   instagram: { usuario: "natinails2.0", url: "https://www.instagram.com/natinails2.0/" },
   whatsapp: "5493812209727",
+  adminPin: "1234",
   colores: {
     fondo: "#0e0e0f",
     superficie: "#19191b",
