@@ -52,6 +52,7 @@ export const natinails: StudioDemoConfig = {
       direccion: "Marcos Paz 717, San Miguel de Tucumán, Tucumán",
       horarios: HORARIO_SAN_MARTIN,
       horarioAConfirmar: true,
+      notaHorario: "Mientras tanto usamos el de San Martín.",
       ocupacionEjemplo: 0.22,
     },
     {
@@ -61,6 +62,7 @@ export const natinails: StudioDemoConfig = {
       direccion: "Heller 175, Yerba Buena, Tucumán",
       horarios: HORARIO_SAN_MARTIN,
       horarioAConfirmar: true,
+      notaHorario: "Mientras tanto usamos el de San Martín.",
       ocupacionEjemplo: 0.15,
     },
   ],
@@ -104,4 +106,13 @@ export const natinails: StudioDemoConfig = {
     descripcion: "Elegí sede, servicio y horario en 1 minuto",
   },
   avisoDemo: "Muestra creada por Bee Code para Nati Nails 2.0. Las reservas de esta página no son reales.",
+  marca: { tipo: "nn", etiqueta: "Nati Nails | Artist", rayo: true },
+  textos: {
+    duenio: "Nati",
+    pasosPortada: ["Elegí tu sede", "Elegí servicio y extras", "Elegí día y horario"],
+    ayudaTelefono: "Con código de área, sin 0 ni 15 (igual los aceptamos).",
+    comoLlega: "Así le llega este turno al estudio, ordenado por sede.",
+    panelBajada: "Turnos de las 3 sedes en un solo lugar.",
+    libreParaOtra: "El horario queda libre para otra clienta.",
+  },
 };

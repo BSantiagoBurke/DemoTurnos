@@ -10,8 +10,12 @@ import {
   findServicio,
   formatMessageDate,
   formatMinutes,
+  mapsUrl,
+  mergeSlots,
   servicioLabel,
   slotsForDate,
+  studioFlow,
+  type StudioFlowStep,
   totalDuration,
 } from "@/lib/studio/booking";
 import { busyIntervals } from "@/lib/studio/agenda";
@@ -22,20 +26,29 @@ import { useNow } from "@/lib/hooks/useNow";
 import { formatArgentinePhone } from "@/lib/phone";
 import { timeToMinutes, toLocalDate, toLocalTime, type LocalDate } from "@/lib/time";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
-import { NNMonogram } from "./NNMonogram";
+import { Marca } from "./Marca";
 import { StudioFooter } from "./StudioFooter";
-import { AgendaStep, DatosStep, ExtrasStep, PrimaryButton, Resumen, SedeStep, ServicioStep } from "./StudioSteps";
+import {
+  AgendaStep,
+  DatosStep,
+  ExtrasStep,
+  NotaConsulta,
+  PrimaryButton,
+  ProfesionalStep,
+  Resumen,
+  SedeStep,
+  ServicioStep,
+  SIN_PREFERENCIA,
+} from "./StudioSteps";
 
-type Step = "portada" | "sede" | "servicio" | "extras" | "agenda" | "datos" | "confirmacion" | "listo";
+type Step = "portada" | StudioFlowStep;
+type FlowStep = StudioFlowStep;
 
-const FLOW: Exclude<Step, "portada">[] = ["sede", "servicio", "extras", "agenda", "datos", "confirmacion", "listo"];
-/** Pasos que cuentan en la barra de progreso ("listo" es la pantalla final). */
-const PROGRESS = FLOW.length - 1;
-
-const TITLES: Record<Exclude<Step, "portada">, string> = {
+const TITLES: Record<FlowStep, string> = {
   sede: "¿En qué sede?",
   servicio: "Elegí el servicio",
   extras: "¿Sumás algo?",
+  profesional: "¿Con quién?",
   agenda: "Elegí día y horario",
   datos: "Tus datos",
   confirmacion: "Revisá y confirmá",
@@ -43,11 +56,18 @@ const TITLES: Record<Exclude<Step, "portada">, string> = {
 };
 
 export function StudioBooking({ config }: { config: StudioDemoConfig }) {
+  const FLOW = studioFlow(config);
+  /** Pasos que cuentan en la barra de progreso ("listo" es la pantalla final). */
+  const PROGRESS = FLOW.length - 1;
+  const profesionales = config.profesionales ?? [];
+  const unaSede = config.sedes.length === 1;
   // El paso vive en la URL (?paso=...): así el "atrás" del celular vuelve un paso.
   const searchParams = useSearchParams();
   const pasoParam = searchParams.get("paso");
-  const requestedStep: Step = FLOW.includes(pasoParam as (typeof FLOW)[number]) ? (pasoParam as Step) : "portada";
-  const [sedeId, setSedeId] = useState<string | null>(null);
+  const requestedStep: Step = FLOW.includes(pasoParam as FlowStep) ? (pasoParam as Step) : "portada";
+  const [sedeId, setSedeId] = useState<string | null>(unaSede ? config.sedes[0].id : null);
+  /** Id del profesional, SIN_PREFERENCIA o null (todavía no eligió). */
+  const [profesionalSel, setProfesionalSel] = useState<string | null>(null);
   const [servicioId, setServicioId] = useState<string | null>(null);
   const [extraIds, setExtraIds] = useState<string[]>([]);
   const [date, setDate] = useState<LocalDate | null>(null);
@@ -65,18 +85,21 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
   const availableExtras = extrasFor(config, servicio);
   const extras = availableExtras.filter((e) => extraIds.includes(e.id));
   const duration = servicio ? totalDuration(servicio, extras) : 0;
+  const profesional = profesionales.find((p) => p.id === profesionalSel);
+  const sinPreferencia = profesionalSel === SIN_PREFERENCIA;
   // Si falta un dato necesario (por ej. tras el "atrás" o "adelante" del navegador),
   // se muestra el primer paso incompleto.
   const step: Step = (() => {
-    const pos = (s: Step) => FLOW.indexOf(s as (typeof FLOW)[number]);
+    const pos = (s: Step) => FLOW.indexOf(s as FlowStep);
     const need: [Step, boolean][] = [
       ["sede", !!sede],
       ["servicio", !!servicio],
+      ["profesional", profesionales.length === 0 || !!profesional || sinPreferencia],
       ["agenda", !!date && !!time],
       ["datos", !!cliente.nombre],
       ["confirmacion", !!booked],
     ];
-    for (const [s, ok] of need) if (!ok && pos(requestedStep) > pos(s)) return s;
+    for (const [s, ok] of need) if (!ok && pos(s) >= 0 && pos(requestedStep) > pos(s)) return s;
     return requestedStep;
   })();
   const hasEjemplos = config.categorias.some((c) => c.servicios.some((s) => s.ejemplo));
@@ -106,22 +129,35 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
         }
       : null;
 
-  const busyFor = (d: LocalDate) => (sede ? busyIntervals(bookings, blocks, sede.id, d) : []);
-  const days = agendaBase ? dayOptions({ ...agendaBase, days: config.reserva.diasVisibles, busyFor }) : [];
+  // Con profesional elegido, su agenda; con "Sin preferencia", la unión de huecos libres de todos.
+  const busyFor = (d: LocalDate, proId = profesional?.id) => (sede ? busyIntervals(bookings, blocks, sede.id, d, proId) : []);
+  const slotsFor = (d: LocalDate) =>
+    agendaBase
+      ? sinPreferencia
+        ? mergeSlots(profesionales.map((p) => slotsForDate({ ...agendaBase, date: d, busy: busyFor(d, p.id) })))
+        : slotsForDate({ ...agendaBase, date: d, busy: busyFor(d) })
+      : [];
+  const days = agendaBase ? dayOptions({ ...agendaBase, days: config.reserva.diasVisibles, busyFor, slotsFor }) : [];
 
   // Día elegido; si no hay ninguno (o dejó de tener lugar), el primero con horarios libres.
   const firstFree = days.find((d) => d.open && d.freeSlots > 0)?.date ?? null;
   const selectedDay = days.find((d) => d.date === date && d.freeSlots > 0) ? date : firstFree;
-  const slots = agendaBase && selectedDay ? slotsForDate({ ...agendaBase, date: selectedDay, busy: busyFor(selectedDay) }) : [];
+  const slots = selectedDay ? slotsFor(selectedDay) : [];
+
+  // Después de confirmar se muestra el profesional asignado (también con "Sin preferencia").
+  const profesionalNombre =
+    profesionales.find((p) => p.id === booked?.profesionalId)?.nombre ?? profesional?.nombre ?? (sinPreferencia ? "Sin preferencia" : null);
+  const requiereConsulta = !!servicio?.requiereConsulta && !!config.textos.notaConsulta;
 
   const resumenRows =
     sede && servicio && date && time
       ? [
-          { label: "Sede", value: sede.nombre },
+          ...(unaSede ? [] : [{ label: "Sede", value: sede.nombre }]),
           { label: "Servicio", value: servicio.nombre },
+          ...(profesionalNombre ? [{ label: "Estilista", value: profesionalNombre }] : []),
           ...(extras.length ? [{ label: "Extras", value: extras.map((e) => e.nombre).join(", ") }] : []),
           { label: "Día", value: capitalizeFirst(formatMessageDate(date)) },
-          { label: "Hora", value: `${time} h` },
+          { label: "Hora", value: time },
           { label: "Duración", value: `${extras.some((e) => e.desde) ? "aprox. " : ""}${formatMinutes(duration)}` },
         ]
       : [];
@@ -131,7 +167,8 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
       ? buildWhatsAppLink(
           config.whatsapp,
           buildConfirmMessage({
-            sede: sede.nombre,
+            sede: unaSede ? undefined : sede.nombre,
+            profesional: profesionales.find((p) => p.id === booked?.profesionalId)?.nombre,
             servicio: servicioLabel(servicio, extras),
             dia: formatMessageDate(date),
             hora: time,
@@ -147,6 +184,8 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
     try {
       const b = await repository.create({
         sedeId: sede.id,
+        // Sin preferencia: el repositorio asigna al primero con lugar.
+        ...(profesional ? { profesionalId: profesional.id } : {}),
         servicioId: servicio.id,
         extraIds: extras.map((e) => e.id),
         date,
@@ -173,16 +212,20 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
   const restart = () => {
     setBooked(null);
     setError(null);
-    setSedeId(null);
+    setSedeId(unaSede ? config.sedes[0].id : null);
     setServicioId(null);
     setExtraIds([]);
+    setProfesionalSel(null);
     setDate(null);
     setTime(null);
-    go("sede");
+    go(FLOW[0]);
   };
 
+  /** Paso que sigue a `current` en el flujo (para saltear los que no aplican). */
+  const after = (current: FlowStep): FlowStep => FLOW[FLOW.indexOf(current) + 1];
+
   if (step === "portada") {
-    return <Portada config={config} onStart={() => go("sede")} />;
+    return <Portada config={config} onStart={() => go(FLOW[0])} />;
   }
 
   const index = FLOW.indexOf(step);
@@ -207,6 +250,7 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
             categorias={config.categorias}
             selectedId={servicioId}
             showEjemploNote={hasEjemplos}
+            notaConsulta={config.textos.notaConsulta}
             onSelect={(id) => {
               if (id !== servicioId) {
                 setTime(null);
@@ -215,7 +259,8 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
                 setExtraIds((prev) => prev.filter((x) => allowed.has(x)));
               }
               setServicioId(id);
-              go(extrasFor(config, findServicio(config, id)).length ? "extras" : "agenda");
+              const hasExtras = extrasFor(config, findServicio(config, id)).length > 0;
+              go(hasExtras ? "extras" : after(FLOW.includes("extras") ? "extras" : "servicio"));
             }}
           />
         );
@@ -230,15 +275,27 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
               setTime(null);
               setExtraIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
             }}
-            onContinue={() => go("agenda")}
+            onContinue={() => go(after("extras"))}
           />
         ) : null;
+      case "profesional":
+        return (
+          <ProfesionalStep
+            profesionales={profesionales}
+            selectedId={profesionalSel}
+            onSelect={(id) => {
+              if (id !== profesionalSel) setTime(null);
+              setProfesionalSel(id);
+              go("agenda");
+            }}
+          />
+        );
       case "agenda":
         if (!agendaBase) return <div className="h-64 animate-pulse rounded-2xl bg-(--st-surface)" aria-busy="true" />;
         return (
           <>
             <p className="mb-4 text-sm text-(--st-muted)">
-              {sede?.nombre} · {servicio ? servicioLabel(servicio, extras) : ""} ·{" "}
+              {profesionales.length ? profesionalNombre : sede?.nombre} · {servicio ? servicioLabel(servicio, extras) : ""} ·{" "}
               <strong className="text-(--st-text)">{formatMinutes(duration)}</strong>
             </p>
             {error ? (
@@ -248,7 +305,7 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
             ) : null}
             {sede?.horarioAConfirmar ? (
               <p className="mb-4 rounded-xl border border-(--st-border) px-3 py-2 text-xs text-(--st-muted)">
-                Horario de esta sede a confirmar. Mientras tanto usamos el de San Martín.
+                Horario de esta sede a confirmar.{sede.notaHorario ? ` ${sede.notaHorario}` : ""}
               </p>
             ) : null}
             <AgendaStep
@@ -271,7 +328,13 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
       case "datos":
         return (
           <DatosStep
-            summary={<Resumen rows={resumenRows} />}
+            summary={
+              <div className="space-y-2">
+                <Resumen rows={resumenRows} />
+                {requiereConsulta ? <NotaConsulta texto={config.textos.notaConsulta!} /> : null}
+              </div>
+            }
+            hint={config.textos.ayudaTelefono}
             initial={cliente}
             onSubmit={(data) => {
               setCliente(data);
@@ -289,6 +352,7 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
                 { label: "WhatsApp", value: formatArgentinePhone(cliente.telefono) },
               ]}
             />
+            {requiereConsulta ? <NotaConsulta texto={config.textos.notaConsulta!} /> : null}
             <PrimaryButton type="button" onClick={confirmar} disabled={saving} aria-busy={saving}>
               {saving ? "Reservando…" : "Confirmar turno"}
             </PrimaryButton>
@@ -309,7 +373,8 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
               </p>
             </div>
             <Resumen rows={resumenRows} />
-            {whatsappHref ? (
+            {requiereConsulta ? <NotaConsulta texto={config.textos.notaConsulta!} /> : null}
+            {whatsappHref && config.avisoWhatsApp !== false ? (
               <a
                 href={whatsappHref}
                 target="_blank"
@@ -325,11 +390,21 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
             </button>
             <div className="rounded-2xl border border-dashed border-(--st-accent) p-4 text-sm">
               <p className="font-semibold">Para la demo</p>
-              <p className="mt-1 text-(--st-muted)">Así le llega este turno al estudio, ordenado por sede.</p>
-              <a href={`/demo/${config.slug}/panel`} className="mt-3 inline-flex min-h-11 items-center gap-1 font-semibold underline decoration-(--st-accent) decoration-2 underline-offset-4">
-                Ver cómo lo recibe Nati
-                <Icon name="chevronRight" className="size-4" />
-              </a>
+              <p className="mt-1 text-(--st-muted)">{config.textos.comoLlega}</p>
+              {config.avisoWhatsApp === false ? (
+                <a
+                  href={`/demo/${config.slug}/panel`}
+                  className="st-btn mt-4 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl px-6 text-base font-bold"
+                >
+                  Ver cómo lo recibe {config.textos.duenio}
+                  <Icon name="chevronRight" className="size-5" />
+                </a>
+              ) : (
+                <a href={`/demo/${config.slug}/panel`} className="mt-3 inline-flex min-h-11 items-center gap-1 font-semibold underline decoration-(--st-accent) decoration-2 underline-offset-4">
+                  Ver cómo lo recibe {config.textos.duenio}
+                  <Icon name="chevronRight" className="size-4" />
+                </a>
+              )}
             </div>
           </div>
         );
@@ -348,8 +423,17 @@ export function StudioBooking({ config }: { config: StudioDemoConfig }) {
           >
             <Icon name="back" className="size-6" />
           </button>
-          <NNMonogram size={32} />
-          <p className="st-display truncate text-base">{config.nombre}</p>
+          {config.marca.tipo === "wordmark" ? (
+            <>
+              <Marca marca={config.marca} size={30} />
+              <span className="sr-only">{config.nombre}</span>
+            </>
+          ) : (
+            <>
+              <Marca marca={config.marca} size={32} />
+              <p className="st-display truncate text-base">{config.nombre}</p>
+            </>
+          )}
         </div>
 
         {step !== "listo" ? (
@@ -381,15 +465,18 @@ export function Portada({ config, onStart }: { config: StudioDemoConfig; onStart
   return (
     <div className="flex min-h-dvh flex-col">
       <main className="relative mx-auto flex w-full max-w-lg flex-1 flex-col overflow-hidden px-5 pb-6 pt-10">
-        {/* Forma abstracta: brillo de esmalte detrás del logo */}
-        <div aria-hidden className="st-glow pointer-events-none absolute -right-24 -top-16 size-72 rounded-full" />
+        {config.marca.tipo === "nn" ? (
+          // Forma abstracta: brillo de esmalte detrás del logo
+          <div aria-hidden className="st-glow pointer-events-none absolute -right-24 -top-16 size-72 rounded-full" />
+        ) : null}
 
         <div className="relative flex flex-col items-center text-center">
-          <NNMonogram size={112} title="Logo Nati Nails" />
-          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-(--st-muted)">Nati Nails | Artist</p>
+          <Marca marca={config.marca} size={112} title={`Logo ${config.nombre}`} />
+          {config.marca.tipo === "wordmark" ? <span aria-hidden className="mt-4 block h-px w-16 bg-(--st-accent)" /> : null}
+          <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.35em] text-(--st-muted)">{config.marca.etiqueta}</p>
 
           <h1 className="st-display mt-8 text-[2.75rem] leading-[0.95]">
-            <NombreConRayo nombre={config.nombre} />
+            {config.marca.tipo === "nn" && config.marca.rayo ? <NombreConRayo nombre={config.nombre} /> : config.nombre}
           </h1>
           <p className="mt-4 text-xl font-semibold">{config.subtitulo}</p>
           <p className="mt-2 max-w-xs text-(--st-muted)">{config.bajada}</p>
@@ -403,7 +490,7 @@ export function Portada({ config, onStart }: { config: StudioDemoConfig; onStart
         </div>
 
         <ol className="relative mt-10 space-y-2">
-          {["Elegí tu sede", "Elegí servicio y extras", "Elegí día y horario"].map((t, i) => (
+          {config.textos.pasosPortada.map((t, i) => (
             <li key={t} className="flex items-center gap-3 rounded-2xl border border-(--st-border) bg-(--st-surface) px-4 py-3">
               <span className="st-display flex size-8 shrink-0 items-center justify-center rounded-full border border-(--st-accent) text-sm text-(--st-accent)">
                 {i + 1}
@@ -420,7 +507,17 @@ export function Portada({ config, onStart }: { config: StudioDemoConfig; onStart
           </PrimaryButton>
         </div>
 
-        <p className="relative mt-6 text-center text-xs text-(--st-muted)">{zonas.join(" · ")}</p>
+        {config.sedes.length === 1 ? (
+          // Una sola sede: no hay paso de sede, así que la dirección y "Cómo llegar" van en la portada.
+          <p className="relative mt-6 text-center text-xs text-(--st-muted)">
+            {config.sedes[0].nombre}, {config.sedes[0].zona} ·{" "}
+            <a href={mapsUrl(config.sedes[0].direccion)} target="_blank" rel="noopener" className="font-semibold text-(--st-text) underline underline-offset-2">
+              Cómo llegar
+            </a>
+          </p>
+        ) : (
+          <p className="relative mt-6 text-center text-xs text-(--st-muted)">{zonas.join(" · ")}</p>
+        )}
         {config.instagram ? (
           <p className="relative mt-2 text-center text-xs">
             <a href={config.instagram.url} target="_blank" rel="noopener" className="text-(--st-muted) underline underline-offset-2">

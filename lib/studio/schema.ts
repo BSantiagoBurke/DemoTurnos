@@ -61,10 +61,15 @@ export const studioDemoSchema = z
             6: dayHours,
           }),
           horarioAConfirmar: z.boolean().optional(),
+          notaHorario: z.string().min(1).optional(),
           ocupacionEjemplo: z.number().min(0).max(1),
         }),
       )
       .min(1),
+    profesionales: z
+      .array(z.object({ id, nombre: z.string().min(1), ocupacionEjemplo: z.number().min(0).max(1) }))
+      .min(1)
+      .optional(),
     categorias: z
       .array(
         z.object({
@@ -77,6 +82,7 @@ export const studioDemoSchema = z
                 nombre: z.string().min(1),
                 duracionMin: z.number().int().min(5),
                 descripcion: z.string().optional(),
+                requiereConsulta: z.boolean().optional(),
                 ejemplo: z.boolean().optional(),
               }),
             )
@@ -97,6 +103,21 @@ export const studioDemoSchema = z
     ),
     og: z.object({ titulo: z.string().min(1), descripcion: z.string().min(1) }),
     avisoDemo: z.string().min(1),
+    marca: z.discriminatedUnion("tipo", [
+      z.object({ tipo: z.literal("nn"), etiqueta: z.string().min(1), rayo: z.boolean().optional() }),
+      z.object({ tipo: z.literal("wordmark"), texto: z.string().min(1), etiqueta: z.string().min(1) }),
+    ]),
+    textos: z.object({
+      duenio: z.string().min(1),
+      pasosPortada: z.array(z.string().min(1)).min(1).max(4),
+      ayudaTelefono: z.string().min(1),
+      comoLlega: z.string().min(1),
+      panelBajada: z.string().min(1),
+      libreParaOtra: z.string().min(1),
+      notaConsulta: z.string().min(1).optional(),
+      canalesPrevios: z.string().min(1).optional(),
+    }),
+    avisoWhatsApp: z.boolean().optional(),
   })
   .superRefine((c, ctx) => {
     const unique = (path: string, ids: string[]) => {
@@ -110,6 +131,12 @@ export const studioDemoSchema = z
     unique("categorias", c.categorias.map((s) => s.id));
     unique("servicios", c.categorias.flatMap((cat) => cat.servicios.map((s) => s.id)));
     unique("extras", c.extras.map((e) => e.id));
+    unique("profesionales", (c.profesionales ?? []).map((p) => p.id));
+
+    const conConsulta = c.categorias.some((cat) => cat.servicios.some((s) => s.requiereConsulta));
+    if (conConsulta && !c.textos.notaConsulta) {
+      ctx.addIssue({ code: "custom", path: ["textos", "notaConsulta"], message: "Hay servicios con requiereConsulta: falta la nota" });
+    }
 
     const categoriaIds = new Set(c.categorias.map((cat) => cat.id));
     c.extras.forEach((e, i) => {

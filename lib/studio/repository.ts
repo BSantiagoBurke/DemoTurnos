@@ -1,5 +1,5 @@
 import { createSafeStore, type KeyValueStore } from "../repositories/storage";
-import { checkSlot, seedBookings, sortBookings } from "./agenda";
+import { assignProfesional, checkSlot, seedBookings, sortBookings } from "./agenda";
 import type { StudioBlock, StudioBooking, StudioBookingStatus, StudioDemoConfig } from "./types";
 
 export type NewStudioBooking = Omit<StudioBooking, "id" | "slug" | "status" | "origen" | "createdAt">;
@@ -12,7 +12,10 @@ export type NewStudioBlock = Omit<StudioBlock, "id" | "slug">;
 export interface StudioRepository {
   list(): Promise<StudioBooking[]>;
   listBlocks(): Promise<StudioBlock[]>;
-  /** Guarda el turno si el horario sigue libre. Si no, lanza SlotTakenError. */
+  /**
+   * Guarda el turno si el horario sigue libre. Si no, lanza SlotTakenError.
+   * En demos con profesionales, sin `profesionalId` ("Sin preferencia") asigna al primero con lugar.
+   */
   create(input: NewStudioBooking): Promise<StudioBooking>;
   updateStatus(id: string, status: StudioBookingStatus): Promise<StudioBooking>;
   createBlock(input: NewStudioBlock): Promise<StudioBlock>;
@@ -101,10 +104,17 @@ export class LocalStorageStudioRepository implements StudioRepository {
   async create(input: NewStudioBooking): Promise<StudioBooking> {
     this.ensureSeeded();
     const bookings = this.read<StudioBooking>(this.keys.bookings);
-    const check = checkSlot(this.config, bookings, this.read<StudioBlock>(this.keys.blocks), input);
+    const blocks = this.read<StudioBlock>(this.keys.blocks);
+    let profesionalId = input.profesionalId;
+    if (this.config.profesionales?.length && !profesionalId) {
+      profesionalId = assignProfesional(this.config, bookings, blocks, input) ?? undefined;
+      if (!profesionalId) throw new SlotTakenError("ocupado");
+    }
+    const withPro = profesionalId ? { ...input, profesionalId } : input;
+    const check = checkSlot(this.config, bookings, blocks, withPro);
     if (!check.ok) throw new SlotTakenError(check.reason);
     const booking: StudioBooking = {
-      ...input,
+      ...withPro,
       id: newId("tn"),
       slug: this.config.slug,
       status: "confirmado",

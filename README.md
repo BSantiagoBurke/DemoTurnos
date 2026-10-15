@@ -21,6 +21,8 @@ Next.js 16 (App Router) · TypeScript estricto · Tailwind CSS 4 · date-fns + d
 
 | `/demo/natinails` | Demo personalizada de Nati Nails 2.0 con la plantilla "estudio" (ver abajo). |
 | `/demo/natinails/panel` | Panel del estudio (PIN de demo `1234`): turnos de las 3 sedes, filtro por sede, día y semana, atendido, cancelar y bloqueos. |
+| `/demo/jesusestilistas` | Demo de Jesús Estilistas (peluquería, 1 sede, 3 estilistas genéricos): servicio → estilista o "Sin preferencia" → horario. |
+| `/demo/jesusestilistas/panel` | Panel (PIN `1234`): columnas por estilista (pestañas en el celular), "Turnos de hoy" y "Llegaron por la web", limpiar reservas de prueba. |
 
 Un slug que no existe en `tenants/` da 404. Todas las páginas tienen `noindex, nofollow` (meta, header `X-Robots-Tag` y `robots.txt`).
 
@@ -137,13 +139,13 @@ Hecho por [BeeCode](https://beecodelab.com).
 
 ## Plantilla "estudio" (`/demo/<slug>`)
 
-Para negocios donde la clienta elige **sede primero** y no hace falta elegir profesional (estudios de uñas, por ejemplo). Primera demo: `/demo/natinails`.
+Demos armadas por config. Los pasos opcionales dependen de la config: **sede** solo si hay más de una, **extras** solo si hay extras y **profesional** solo si hay `profesionales` (cada uno con su agenda, más "Sin preferencia"). Demos: `/demo/natinails` (3 sedes, sin profesional) y `/demo/jesusestilistas` (1 sede, 3 estilistas).
 
-- **Config:** `demos/<slug>.ts`, tipada y validada con zod (`lib/studio/schema.ts`): nombre, textos de portada, rating público (opcional), Instagram, WhatsApp, colores (se valida el contraste AA), reserva (días visibles, bloque, anticipación), sedes con horario y `horarioAConfirmar`, categorías con servicios (`ejemplo: true` mientras no estén confirmados), extras que suman minutos (`soloCategorias` para limitarlos) y textos de Open Graph.
+- **Config:** `demos/<slug>.ts`, tipada y validada con zod (`lib/studio/schema.ts`): nombre, textos de portada, rating público (opcional), Instagram, WhatsApp, colores (se valida el contraste AA), reserva (días visibles, bloque, anticipación), sedes con horario y `horarioAConfirmar`, categorías con servicios (`ejemplo: true` mientras no estén confirmados; `requiereConsulta: true` cuando la duración final se confirma en el estudio, con la nota en `textos.notaConsulta`), extras que suman minutos (`soloCategorias` para limitarlos), `profesionales` opcionales, `marca` (monograma NN o wordmark en texto), `textos` propios del negocio, `avisoWhatsApp` y textos de Open Graph.
 - **Registro:** agregar la config en `demos/index.ts`. `npm run validate-tenants` la valida y exige que exista `app/demo/<slug>/page.tsx`.
-- **Ruta:** copiar `app/demo/natinails/` (layout con fuentes y colores, página, `opengraph-image.tsx` e `icon.svg`).
+- **Ruta:** copiar `app/demo/jesusestilistas/` (layout con `StudioRoot`, fuentes, página, panel, `opengraph-image.tsx` e `icon.svg`). Ojo: en `fonts.ts`, los nombres de las constantes tienen que ser únicos por demo, porque `next/font` los usa como nombre de familia.
 - **Flujo:** portada → sede (con "Cómo llegar") → servicio → extras → día y horario (14 días, bloques de 30 min, según la duración total) → datos (nombre y WhatsApp argentino) → resumen y "Confirmar turno". La reserva se guarda y el horario queda ocupado; después se puede avisar por WhatsApp (opcional) y ver el turno en el panel. El paso va en la URL (`?paso=...`), así el "atrás" del celular vuelve un paso.
-- **Datos:** reserva y panel usan el mismo repositorio (`lib/studio/repository.ts`, interfaz `StudioRepository`). En la demo es localStorage con memoria de respaldo, así que reserva y panel se ven en el mismo navegador. El repositorio rechaza turnos superpuestos en la misma sede, fuera de horario o sobre un bloqueo. Para producción se implementa la interfaz contra una API sin tocar componentes.
-- **Turnos de ejemplo:** se generan una vez por día a partir de `lib/studio/busy.ts` (determinísticos por sede y día; `ocupacionEjemplo` regula cuántos), con nombres inventados y etiqueta "ejemplo". Las reservas hechas desde la web, sus estados y los bloqueos se conservan. "Reiniciar demo" en el panel borra todo y vuelve a generar los ejemplos.
+- **Datos:** reserva y panel usan el mismo repositorio (`lib/studio/repository.ts`, interfaz `StudioRepository`). En la demo es localStorage con memoria de respaldo, así que reserva y panel se ven en el mismo navegador. El repositorio rechaza turnos superpuestos en la misma sede (o en el mismo profesional, si la demo tiene profesionales), fuera de horario o sobre un bloqueo. Con "Sin preferencia" asigna al primer profesional con lugar; la agenda muestra la unión de huecos libres. Para producción se implementa la interfaz contra una API sin tocar componentes.
+- **Turnos de ejemplo:** se generan una vez por día a partir de `lib/studio/busy.ts` (determinísticos por sede, profesional y día; `ocupacionEjemplo` regula cuántos), con nombres inventados y etiqueta "ejemplo". Las reservas hechas desde la web, sus estados y los bloqueos se conservan. "Reiniciar demo" en el panel borra todo y vuelve a generar los ejemplos.
 - **Open Graph:** la imagen se genera con `next/og`. Para que WhatsApp muestre la vista previa, la URL tiene que ser absoluta: se toma de `NEXT_PUBLIC_SITE_URL` o, en Vercel, del dominio de producción.
-- **Fuentes:** Syne (títulos) y Manrope (texto), de Google Fonts con licencia OFL, servidas desde `assets/fonts` para que el build no dependa de la red.
+- **Fuentes:** Syne (títulos de Nati Nails), Anton (wordmark y títulos de Jesús) y Manrope (texto), de Google Fonts con licencia OFL, servidas desde `assets/fonts` para que el build no dependa de la red.

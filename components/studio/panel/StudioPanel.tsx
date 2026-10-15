@@ -5,7 +5,7 @@ import { Icon } from "@/components/ui/Icon";
 import { useAdminSession } from "@/lib/hooks/useAdminSession";
 import { useNow } from "@/lib/hooks/useNow";
 import type { StudioDemoConfig } from "@/lib/studio/types";
-import { NNMonogram } from "../NNMonogram";
+import { Marca } from "../Marca";
 import { StudioFooter } from "../StudioFooter";
 import { PrimaryButton } from "../StudioSteps";
 import { StudioDashboard } from "./StudioDashboard";
@@ -40,9 +40,9 @@ function PinGate({ config, onUnlock }: { config: StudioDemoConfig; onUnlock: () 
   return (
     <main className="mx-auto w-full max-w-sm flex-1 px-5 py-10">
       <div className="flex flex-col items-center text-center">
-        <NNMonogram size={72} />
+        <Marca marca={config.marca} size={72} />
         <h1 className="st-display mt-5 text-3xl">Panel del estudio</h1>
-        <p className="mt-2 text-(--st-muted)">Turnos de las 3 sedes en un solo lugar.</p>
+        <p className="mt-2 text-(--st-muted)">{config.textos.panelBajada}</p>
       </div>
       <form onSubmit={submit} noValidate className="mt-8 space-y-4">
         <div>

@@ -4,13 +4,13 @@ import { useState, type FormEvent } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { formatArgentinePhone } from "@/lib/phone";
 import { bookingInterval, busyIntervals, isActive } from "@/lib/studio/agenda";
-import { findServicio, formatMessageDate } from "@/lib/studio/booking";
+import { findServicio, formatMessageDate, formatMinutes } from "@/lib/studio/booking";
 import { SlotTakenError } from "@/lib/studio/repository";
 import type { StudioBlock, StudioBooking, StudioBookingStatus, StudioDemoConfig } from "@/lib/studio/types";
 import { useStudioData } from "@/lib/studio/useStudioData";
 import { addDaysLocal, minutesToTime, timeToMinutes, toLocalDate, toLocalTime, weekdayOf, type LocalDate } from "@/lib/time";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
-import { NNMonogram } from "../NNMonogram";
+import { Marca } from "../Marca";
 
 type View = "dia" | "semana";
 
@@ -27,8 +27,12 @@ export function StudioDashboard({ config, now, onLogout }: { config: StudioDemoC
   const [blockFormOpen, setBlockFormOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  /** Demo con profesionales: agenda en columnas por profesional y resumen de venta arriba. */
+  const proMode = !!config.profesionales?.length;
+  const variasSedes = config.sedes.length > 1;
 
   const sedeName = (id: string) => config.sedes.find((s) => s.id === id)?.nombre ?? id;
+  const proName = (id?: string) => config.profesionales?.find((p) => p.id === id)?.nombre ?? "";
   const inSede = <T extends { sedeId: string }>(x: T) => sedeFilter === "todas" || x.sedeId === sedeFilter;
 
   const dayBookings = bookings.filter((b) => b.date === date && inSede(b));
@@ -40,6 +44,11 @@ export function StudioDashboard({ config, now, onLogout }: { config: StudioDemoC
   const webNuevas = bookings
     .filter((b) => b.origen === "web" && b.status !== "cancelado" && b.date >= today && inSede(b))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // Resumen de hoy: turnos del día y reservas que entraron hoy desde la página.
+  const turnosHoy = bookings.filter((b) => b.date === today && isActive(b)).length;
+  const llegaronHoy = bookings.filter(
+    (b) => b.origen === "web" && isActive(b) && toLocalDate(new Date(b.createdAt)) === today,
+  ).length;
 
   const act = async (id: string, status: StudioBookingStatus) => {
     setNotice(null);
@@ -53,11 +62,15 @@ export function StudioDashboard({ config, now, onLogout }: { config: StudioDemoC
   };
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-6 pt-3">
+    <main className={`mx-auto w-full flex-1 px-4 pb-6 pt-3 ${proMode ? "max-w-5xl" : "max-w-3xl"}`}>
       <header className="flex items-center gap-3">
-        <NNMonogram size={36} />
+        <Marca marca={config.marca} size={config.marca.tipo === "wordmark" ? 30 : 36} />
         <div className="min-w-0 flex-1">
-          <p className="st-display truncate text-lg leading-tight">{config.nombre}</p>
+          {config.marca.tipo === "wordmark" ? (
+            <p className="sr-only">{config.nombre}</p>
+          ) : (
+            <p className="st-display truncate text-lg leading-tight">{config.nombre}</p>
+          )}
           <p className="text-xs text-(--st-muted)">Panel del estudio</p>
         </div>
         <button type="button" onClick={onLogout} className="min-h-11 rounded-full px-3 text-sm font-semibold text-(--st-muted) underline underline-offset-4">
@@ -65,25 +78,47 @@ export function StudioDashboard({ config, now, onLogout }: { config: StudioDemoC
         </button>
       </header>
 
+      {/* Resumen de hoy (demos con profesionales): el mensaje de venta */}
+      {proMode ? (
+        <section aria-labelledby="resumen-hoy" className="mt-5">
+          <h2 id="resumen-hoy" className="sr-only">
+            Resumen de hoy
+          </h2>
+          <dl className="grid grid-cols-2 gap-2">
+            <div className="rounded-2xl bg-(--st-surface) px-4 py-3">
+              <dt className="text-sm text-(--st-muted)">Turnos de hoy</dt>
+              <dd className="st-display mt-1 text-3xl">{loaded ? turnosHoy : "–"}</dd>
+            </div>
+            <div className="rounded-2xl border border-(--st-accent) bg-(--st-surface) px-4 py-3">
+              <dt className="text-sm text-(--st-muted)">Llegaron por la web</dt>
+              <dd className="st-display mt-1 text-3xl text-(--st-accent)">{loaded ? llegaronHoy : "–"}</dd>
+            </div>
+          </dl>
+          {config.textos.canalesPrevios ? <p className="mt-2 text-sm text-(--st-muted)">{config.textos.canalesPrevios}</p> : null}
+        </section>
+      ) : null}
+
       {/* Sedes */}
-      <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Filtrar por sede">
-        {[{ id: "todas", nombre: "Todas" }, ...config.sedes].map((s) => {
-          const active = sedeFilter === s.id;
-          return (
-            <button
-              key={s.id}
-              type="button"
-              aria-pressed={active}
-              onClick={() => setSedeFilter(s.id)}
-              className={`min-h-10 rounded-full border px-4 text-sm font-semibold ${
-                active ? "st-btn border-transparent" : "border-(--st-border) bg-(--st-surface)"
-              }`}
-            >
-              {s.nombre}
-            </button>
-          );
-        })}
-      </div>
+      {variasSedes ? (
+        <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Filtrar por sede">
+          {[{ id: "todas", nombre: "Todas" }, ...config.sedes].map((s) => {
+            const active = sedeFilter === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setSedeFilter(s.id)}
+                className={`min-h-10 rounded-full border px-4 text-sm font-semibold ${
+                  active ? "st-btn border-transparent" : "border-(--st-border) bg-(--st-surface)"
+                }`}
+              >
+                {s.nombre}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       {/* Reservas web nuevas */}
       {loaded && webNuevas.length > 0 ? (
@@ -107,7 +142,7 @@ export function StudioDashboard({ config, now, onLogout }: { config: StudioDemoC
                   <span className="min-w-0">
                     <span className="block truncate font-semibold">{b.nombre}</span>
                     <span className="block truncate text-sm text-(--st-muted)">
-                      {sedeName(b.sedeId)} · {capitalize(formatMessageDate(b.date))} {b.time} h
+                      {proMode ? proName(b.profesionalId) : sedeName(b.sedeId)} · {capitalize(formatMessageDate(b.date))} {b.time}
                     </span>
                   </span>
                   <Icon name="chevronRight" className="size-5 shrink-0 text-(--st-muted)" />
@@ -178,25 +213,42 @@ export function StudioDashboard({ config, now, onLogout }: { config: StudioDemoC
         <div className="mt-4 h-48 animate-pulse rounded-2xl bg-(--st-surface)" aria-busy="true" />
       ) : view === "dia" ? (
         <>
-          <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
-            <Stat label="Turnos" value={activos.length} />
-            <Stat label="Por atender" value={porAtender.length} />
-            <Stat label="Desde la web" value={activos.filter((b) => b.origen === "web").length} accent />
-          </dl>
+          {proMode ? (
+            <ProfesionalDayView
+              config={config}
+              bookings={dayBookings}
+              blocks={dayBlocks}
+              openId={openId}
+              onToggle={(id) => setOpenId(openId === id ? null : id)}
+              onStatus={act}
+              onDeleteBlock={async (id) => {
+                await repository.deleteBlock(id);
+                await refresh();
+              }}
+            />
+          ) : (
+            <>
+              <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
+                <Stat label="Turnos" value={activos.length} />
+                <Stat label="Por atender" value={porAtender.length} />
+                <Stat label="Desde la web" value={activos.filter((b) => b.origen === "web").length} accent />
+              </dl>
 
-          <DayList
-            config={config}
-            bookings={dayBookings}
-            blocks={dayBlocks}
-            showSede={sedeFilter === "todas"}
-            openId={openId}
-            onToggle={(id) => setOpenId(openId === id ? null : id)}
-            onStatus={act}
-            onDeleteBlock={async (id) => {
-              await repository.deleteBlock(id);
-              await refresh();
-            }}
-          />
+              <DayList
+                config={config}
+                bookings={dayBookings}
+                blocks={dayBlocks}
+                showSede={sedeFilter === "todas"}
+                openId={openId}
+                onToggle={(id) => setOpenId(openId === id ? null : id)}
+                onStatus={act}
+                onDeleteBlock={async (id) => {
+                  await repository.deleteBlock(id);
+                  await refresh();
+                }}
+              />
+            </>
+          )}
 
           <div className="mt-5">
             {blockFormOpen ? (
@@ -230,7 +282,7 @@ export function StudioDashboard({ config, now, onLogout }: { config: StudioDemoC
           start={date}
           today={today}
           bookings={bookings.filter(inSede)}
-          showSede={sedeFilter === "todas"}
+          showSede={variasSedes && sedeFilter === "todas"}
           onOpenDay={(d) => {
             setDate(d);
             setView("dia");
@@ -239,10 +291,17 @@ export function StudioDashboard({ config, now, onLogout }: { config: StudioDemoC
       )}
 
       <div className="mt-8 rounded-2xl border border-dashed border-(--st-border) p-4 text-sm text-(--st-muted)">
-        <p>
-          Los turnos marcados como <strong className="text-(--st-text)">ejemplo</strong> son inventados para mostrar la agenda llena. Lo que se
-          reserva desde la página aparece como <strong className="text-(--st-accent)">web</strong>.
-        </p>
+        {proMode ? (
+          <p>
+            Los turnos marcados como <strong className="text-(--st-text)">ejemplo</strong> son inventados para mostrar la agenda llena. Los que
+            reserves desde la página aparecen destacados en <strong className="text-(--st-accent)">cobre</strong>.
+          </p>
+        ) : (
+          <p>
+            Los turnos marcados como <strong className="text-(--st-text)">ejemplo</strong> son inventados para mostrar la agenda llena. Lo que se
+            reserva desde la página aparece como <strong className="text-(--st-accent)">web</strong>.
+          </p>
+        )}
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
           <a href={`/demo/${config.slug}`} className="inline-flex min-h-11 items-center font-semibold text-(--st-text) underline underline-offset-4">
             Hacer una reserva de prueba
@@ -259,7 +318,7 @@ export function StudioDashboard({ config, now, onLogout }: { config: StudioDemoC
                 }}
                 className="min-h-11 font-semibold text-(--st-error) underline underline-offset-4"
               >
-                Sí, borrar reservas de prueba
+                {proMode ? "Sí, limpiar" : "Sí, borrar reservas de prueba"}
               </button>
               <button type="button" onClick={() => setConfirmReset(false)} className="min-h-11 underline underline-offset-4">
                 No
@@ -268,7 +327,7 @@ export function StudioDashboard({ config, now, onLogout }: { config: StudioDemoC
           ) : (
             <button type="button" onClick={() => setConfirmReset(true)} className="inline-flex min-h-11 items-center gap-1 underline underline-offset-4">
               <Icon name="refresh" className="size-4" />
-              Reiniciar demo
+              {proMode ? "Limpiar reservas de prueba" : "Reiniciar demo"}
             </button>
           )}
         </div>
@@ -286,6 +345,96 @@ function Stat({ label, value, accent }: { label: string; value: number; accent?:
   );
 }
 
+/* ---------- Día por profesional ---------- */
+
+/** Columnas por profesional (en el celular, una pestaña por profesional). */
+function ProfesionalDayView({
+  config,
+  bookings,
+  blocks,
+  openId,
+  onToggle,
+  onStatus,
+  onDeleteBlock,
+}: {
+  config: StudioDemoConfig;
+  bookings: StudioBooking[];
+  blocks: StudioBlock[];
+  openId: string | null;
+  onToggle: (id: string) => void;
+  onStatus: (id: string, status: StudioBookingStatus) => void;
+  onDeleteBlock: (id: string) => void;
+}) {
+  const pros = config.profesionales ?? [];
+  const [tab, setTab] = useState(pros[0]?.id);
+  const columns = pros.map((p) => ({
+    p,
+    bookings: bookings.filter((b) => b.profesionalId === p.id),
+    blocks: blocks.filter((bl) => !bl.profesionalId || bl.profesionalId === p.id),
+  }));
+  const count = (list: StudioBooking[]) => list.filter(isActive).length;
+
+  return (
+    <>
+      <div
+        className="mt-4 grid gap-1 rounded-2xl bg-(--st-surface) p-1 md:hidden"
+        style={{ gridTemplateColumns: `repeat(${pros.length}, minmax(0, 1fr))` }}
+        role="tablist"
+        aria-label="Estilistas"
+      >
+        {columns.map(({ p, bookings: list }) => (
+          <button
+            key={p.id}
+            id={`tab-${p.id}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === p.id}
+            aria-controls={`col-${p.id}`}
+            onClick={() => setTab(p.id)}
+            className={`min-h-14 rounded-xl px-1 text-sm font-semibold leading-tight ${
+              tab === p.id ? "bg-(--st-bg) text-(--st-text)" : "text-(--st-muted)"
+            }`}
+          >
+            <span className="block truncate">{p.nombre}</span>
+            <span className="block text-xs font-normal text-(--st-muted)">
+              {count(list)} {count(list) === 1 ? "turno" : "turnos"}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="md:mt-4 md:grid md:gap-3" style={{ gridTemplateColumns: `repeat(${pros.length}, minmax(0, 1fr))` }}>
+        {columns.map(({ p, bookings: list, blocks: bl }) => (
+          <section
+            key={p.id}
+            id={`col-${p.id}`}
+            role="tabpanel"
+            aria-labelledby={`tab-${p.id}`}
+            className={`min-w-0 ${tab === p.id ? "block" : "hidden md:block"}`}
+          >
+            <h3 className="mt-4 hidden items-baseline justify-between border-b border-(--st-border) pb-2 md:flex">
+              <span className="st-display text-lg">{p.nombre}</span>
+              <span className="text-sm text-(--st-muted)">
+                {count(list)} {count(list) === 1 ? "turno" : "turnos"}
+              </span>
+            </h3>
+            <DayList
+              config={config}
+              bookings={list}
+              blocks={bl}
+              showSede={false}
+              proMode
+              openId={openId}
+              onToggle={onToggle}
+              onStatus={onStatus}
+              onDeleteBlock={onDeleteBlock}
+            />
+          </section>
+        ))}
+      </div>
+    </>
+  );
+}
+
 /* ---------- Lista del día ---------- */
 
 type Row = { kind: "turno"; at: number; b: StudioBooking } | { kind: "bloqueo"; at: number; bl: StudioBlock };
@@ -295,6 +444,7 @@ function DayList({
   bookings,
   blocks,
   showSede,
+  proMode = false,
   openId,
   onToggle,
   onStatus,
@@ -304,6 +454,7 @@ function DayList({
   bookings: StudioBooking[];
   blocks: StudioBlock[];
   showSede: boolean;
+  proMode?: boolean;
   openId: string | null;
   onToggle: (id: string) => void;
   onStatus: (id: string, status: StudioBookingStatus) => void;
@@ -330,6 +481,7 @@ function DayList({
               Bloqueado hasta {row.bl.end}
               {row.bl.motivo ? ` · ${row.bl.motivo}` : ""}
               {showSede ? ` · ${sedeName(row.bl.sedeId)}` : ""}
+              {proMode && !row.bl.profesionalId ? " · todo el estudio" : ""}
             </span>
             <button type="button" onClick={() => onDeleteBlock(row.bl.id)} className="min-h-11 shrink-0 px-2 font-semibold underline underline-offset-4">
               Quitar
@@ -341,6 +493,7 @@ function DayList({
             config={config}
             b={row.b}
             sede={showSede ? sedeName(row.b.sedeId) : null}
+            proMode={proMode}
             open={openId === row.b.id}
             onToggle={() => onToggle(row.b.id)}
             onStatus={onStatus}
@@ -355,6 +508,7 @@ function BookingRow({
   config,
   b,
   sede,
+  proMode,
   open,
   onToggle,
   onStatus,
@@ -362,6 +516,7 @@ function BookingRow({
   config: StudioDemoConfig;
   b: StudioBooking;
   sede: string | null;
+  proMode: boolean;
   open: boolean;
   onToggle: () => void;
   onStatus: (id: string, status: StudioBookingStatus) => void;
@@ -371,9 +526,8 @@ function BookingRow({
   const extras = config.extras.filter((e) => b.extraIds.includes(e.id)).map((e) => e.nombre);
   const end = minutesToTime(bookingInterval(b).end);
   const cancelled = b.status === "cancelado";
-  const msg = `Hola ${b.nombre.split(" ")[0]}! Te escribimos de ${config.nombre} por tu turno del ${formatMessageDate(b.date)} a las ${b.time} en ${
-    config.sedes.find((s) => s.id === b.sedeId)?.nombre ?? ""
-  }.`;
+  const donde = config.sedes.length > 1 ? ` en ${config.sedes.find((s) => s.id === b.sedeId)?.nombre ?? ""}` : "";
+  const msg = `Hola ${b.nombre.split(" ")[0]}! Te escribimos de ${config.nombre} por tu turno del ${formatMessageDate(b.date)} a las ${b.time}${donde}.`;
 
   return (
     <li className={`rounded-2xl border bg-(--st-surface) ${b.origen === "web" ? "border-(--st-accent)" : "border-(--st-border)"} ${cancelled ? "opacity-60" : ""}`}>
@@ -382,18 +536,35 @@ function BookingRow({
           <span className={`block font-bold ${cancelled ? "line-through" : ""}`}>{b.time}</span>
           <span className="block text-xs text-(--st-muted)">{end}</span>
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-1.5">
-            <span className="font-semibold">{b.nombre}</span>
-            {b.origen === "web" ? <Badge tone="accent">web</Badge> : <Badge>ejemplo</Badge>}
-            {b.status === "atendido" ? <Badge tone="ok">atendido</Badge> : null}
-            {cancelled ? <Badge tone="error">cancelado</Badge> : null}
+        {proMode ? (
+          // Nombre, servicio con duración y etiquetas en su propia fila (entran en columnas angostas).
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">{b.nombre}</span>
+            <span className="mt-0.5 block text-sm text-(--st-muted)">
+              {servicio?.nombre} · {formatMinutes(b.durationMin)}
+              {servicio?.requiereConsulta ? " (base)" : ""}
+            </span>
+            <span className="mt-2 flex flex-wrap items-center gap-1.5">
+              <Badge tone={b.origen === "web" ? "accent" : undefined}>Reservado online</Badge>
+              {b.origen === "ejemplo" ? <span className="text-xs text-(--st-muted)">ejemplo</span> : null}
+              {b.status === "atendido" ? <Badge tone="ok">atendido</Badge> : null}
+              {cancelled ? <Badge tone="error">cancelado</Badge> : null}
+            </span>
           </span>
-          <span className="mt-0.5 block text-sm text-(--st-muted)">
-            {[servicio?.nombre, ...extras].filter(Boolean).join(" + ")}
-            {sede ? ` · ${sede}` : ""}
+        ) : (
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className="font-semibold">{b.nombre}</span>
+              {b.origen === "web" ? <Badge tone="accent">web</Badge> : <Badge>ejemplo</Badge>}
+              {b.status === "atendido" ? <Badge tone="ok">atendido</Badge> : null}
+              {cancelled ? <Badge tone="error">cancelado</Badge> : null}
+            </span>
+            <span className="mt-0.5 block text-sm text-(--st-muted)">
+              {[servicio?.nombre, ...extras].filter(Boolean).join(" + ")}
+              {sede ? ` · ${sede}` : ""}
+            </span>
           </span>
-        </span>
+        )}
         <Icon name="chevronRight" className={`mt-1 size-5 shrink-0 text-(--st-muted) transition-transform ${open ? "rotate-90" : ""}`} />
       </button>
       {open ? (
@@ -427,7 +598,7 @@ function BookingRow({
             )}
           </div>
           {confirmCancel && b.status === "confirmado" ? (
-            <p className="mt-2 text-xs text-(--st-muted)">El horario queda libre para otra clienta.</p>
+            <p className="mt-2 text-xs text-(--st-muted)">{config.textos.libreParaOtra}</p>
           ) : null}
         </div>
       ) : null}
@@ -444,7 +615,7 @@ function Badge({ children, tone }: { children: React.ReactNode; tone?: "accent" 
         : tone === "error"
           ? "border border-(--st-error) text-(--st-error)"
           : "border border-(--st-border) text-(--st-muted)";
-  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${cls}`}>{children}</span>;
+  return <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${cls}`}>{children}</span>;
 }
 
 function ActionButton({
@@ -511,7 +682,9 @@ function WeekList({
                 <span className="block text-sm text-(--st-muted)">
                   {closed
                     ? "Cerrado"
-                    : showSede
+                    : config.profesionales?.length
+                      ? config.profesionales.map((p) => `${p.nombre}: ${list.filter((b) => b.profesionalId === p.id).length}`).join(" · ")
+                      : showSede
                       ? config.sedes.map((s) => `${s.nombre.split(" ")[0]} ${list.filter((b) => b.sedeId === s.id).length}`).join(" · ")
                       : `${list.length} turnos`}
                 </span>
@@ -545,9 +718,11 @@ function BlockForm({
   defaultSede: string;
   bookings: StudioBooking[];
   onCancel: () => void;
-  onCreate: (input: { sedeId: string; date: LocalDate; start: string; end: string; motivo?: string }) => void;
+  onCreate: (input: { sedeId: string; profesionalId?: string; date: LocalDate; start: string; end: string; motivo?: string }) => void;
 }) {
   const [sedeId, setSedeId] = useState(defaultSede);
+  /** "" = todo el estudio. */
+  const [profesionalId, setProfesionalId] = useState("");
   const sede = config.sedes.find((s) => s.id === sedeId)!;
   const hours = sede.horarios[weekdayOf(date)];
   const step = config.reserva.bloqueMin;
@@ -559,28 +734,43 @@ function BlockForm({
 
   const valid = !!hours && options.includes(start) && options.includes(end) && timeToMinutes(end) > timeToMinutes(start);
   const overlapping = valid
-    ? busyIntervals(bookings, [], sedeId, date).filter((b) => timeToMinutes(start) < b.end && b.start < timeToMinutes(end)).length
+    ? busyIntervals(bookings, [], sedeId, date, profesionalId || undefined).filter((b) => timeToMinutes(start) < b.end && b.start < timeToMinutes(end)).length
     : 0;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!valid) return;
-    onCreate({ sedeId, date, start, end, motivo: motivo.trim() || undefined });
+    onCreate({ sedeId, ...(profesionalId ? { profesionalId } : {}), date, start, end, motivo: motivo.trim() || undefined });
   };
 
   return (
     <form onSubmit={submit} className="space-y-3 rounded-2xl border border-(--st-border) bg-(--st-surface) p-4">
       <p className="font-semibold">Bloquear horario · {capitalize(formatMessageDate(date))}</p>
-      <label className="block text-sm">
-        <span className="mb-1 block text-(--st-muted)">Sede</span>
-        <select value={sedeId} onChange={(e) => setSedeId(e.target.value)} className="st-input">
-          {config.sedes.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.nombre}
-            </option>
-          ))}
-        </select>
-      </label>
+      {config.sedes.length > 1 ? (
+        <label className="block text-sm">
+          <span className="mb-1 block text-(--st-muted)">Sede</span>
+          <select value={sedeId} onChange={(e) => setSedeId(e.target.value)} className="st-input">
+            {config.sedes.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+      {config.profesionales?.length ? (
+        <label className="block text-sm">
+          <span className="mb-1 block text-(--st-muted)">Para</span>
+          <select value={profesionalId} onChange={(e) => setProfesionalId(e.target.value)} className="st-input">
+            <option value="">Todo el estudio</option>
+            {config.profesionales.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       {hours ? (
         <div className="grid grid-cols-2 gap-3">
           <label className="block text-sm">
@@ -601,7 +791,7 @@ function BlockForm({
           </label>
         </div>
       ) : (
-        <p className="text-sm text-(--st-muted)">Esta sede está cerrada ese día.</p>
+        <p className="text-sm text-(--st-muted)">{config.sedes.length > 1 ? "Esta sede está cerrada ese día." : "El estudio está cerrado ese día."}</p>
       )}
       <label className="block text-sm">
         <span className="mb-1 block text-(--st-muted)">Motivo (opcional)</span>

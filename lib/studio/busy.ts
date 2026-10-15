@@ -1,6 +1,6 @@
 import { timeToMinutes, weekdayOf, type LocalDate } from "../time";
 import type { Interval } from "./booking";
-import type { StudioSede } from "./types";
+import type { StudioProfesional, StudioSede } from "./types";
 
 /** PRNG determinístico (mulberry32): misma semilla, mismos datos. */
 function createRandom(seedText: string): () => number {
@@ -16,26 +16,43 @@ function createRandom(seedText: string): () => number {
 
 const DURACIONES = [60, 60, 75, 90, 120];
 
+export type ExampleBusyOptions = {
+  /** Agenda de un profesional: cambia la semilla y usa su ocupación. */
+  profesional?: StudioProfesional;
+  /** Duraciones posibles de los turnos de ejemplo (por defecto, las de Nati Nails). */
+  duraciones?: number[];
+};
+
 /**
- * Turnos ocupados de ejemplo para una sede y un día. Solo en memoria: se recalculan igual
- * cada vez (la semilla es slug + sede + fecha), así la clienta ve siempre la misma agenda
- * y cada sede tiene huecos distintos.
+ * Turnos ocupados de ejemplo para una sede (o un profesional) y un día. Solo en memoria: se
+ * recalculan igual cada vez (la semilla es slug + sede [+ profesional] + fecha), así la clienta
+ * ve siempre la misma agenda y cada sede o profesional tiene huecos distintos.
+ * Sin profesional, la semilla y el resultado son los mismos de antes (Nati Nails no cambia).
  */
-export function exampleBusy(slug: string, sede: StudioSede, date: LocalDate, stepMin = 30): Interval[] {
+export function exampleBusy(
+  slug: string,
+  sede: StudioSede,
+  date: LocalDate,
+  stepMin = 30,
+  options: ExampleBusyOptions = {},
+): Interval[] {
   const hours = sede.horarios[weekdayOf(date)];
   if (!hours) return [];
   const open = timeToMinutes(hours.open);
   const close = timeToMinutes(hours.close);
-  const random = createRandom(`${slug}:${sede.id}:${date}`);
+  const { profesional } = options;
+  const duraciones = options.duraciones?.length ? options.duraciones : DURACIONES;
+  const random = createRandom(profesional ? `${slug}:${sede.id}:${profesional.id}:${date}` : `${slug}:${sede.id}:${date}`);
+  const ocupacion = profesional ? profesional.ocupacionEjemplo : sede.ocupacionEjemplo;
 
   // Cuántos minutos del día ocupar, con algo de variación entre días.
   const dayLength = close - open;
-  const target = dayLength * Math.min(0.5, Math.max(0, sede.ocupacionEjemplo * (0.7 + random() * 0.6)));
+  const target = dayLength * Math.min(0.5, Math.max(0, ocupacion * (0.7 + random() * 0.6)));
 
   const busy: Interval[] = [];
   let used = 0;
   for (let attempt = 0; used < target && attempt < 40; attempt++) {
-    const duration = DURACIONES[Math.floor(random() * DURACIONES.length)];
+    const duration = duraciones[Math.floor(random() * duraciones.length)];
     const steps = Math.floor((dayLength - duration) / stepMin);
     if (steps < 0) continue;
     const start = open + Math.floor(random() * (steps + 1)) * stepMin;

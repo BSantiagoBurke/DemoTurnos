@@ -3,7 +3,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { formatMinutes, mapsUrl, type DayOption, type Slot } from "@/lib/studio/booking";
-import type { StudioCategoria, StudioExtra, StudioSede } from "@/lib/studio/types";
+import type { StudioCategoria, StudioExtra, StudioProfesional, StudioSede } from "@/lib/studio/types";
 import { normalizeArgentinePhone } from "@/lib/phone";
 import { formatLocalDate, weekdayOf, WEEKDAY_SHORT, type LocalDate } from "@/lib/time";
 
@@ -79,17 +79,79 @@ export function SedeStep({
   );
 }
 
+/* ---------- Profesional ---------- */
+
+/** Valor de "Sin preferencia": el repositorio asigna al primero con lugar. */
+export const SIN_PREFERENCIA = "sin-preferencia";
+
+export function ProfesionalStep({
+  profesionales,
+  selectedId,
+  onSelect,
+}: {
+  profesionales: StudioProfesional[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const options = [
+    { id: SIN_PREFERENCIA, nombre: "Sin preferencia", detalle: "Te asignamos quien tenga lugar", marca: null },
+    ...profesionales.map((p, i) => ({ id: p.id, nombre: p.nombre, detalle: null, marca: String(i + 1) })),
+  ];
+  return (
+    <ul className="space-y-2">
+      {options.map((o) => {
+        const selected = o.id === selectedId;
+        return (
+          <li key={o.id}>
+            <button
+              type="button"
+              onClick={() => onSelect(o.id)}
+              aria-pressed={selected}
+              className={`${card} flex min-h-16 items-center gap-3 ${selected ? cardSelected : ""}`}
+            >
+              <span
+                aria-hidden
+                className="st-display flex size-11 shrink-0 items-center justify-center rounded-full border border-(--st-accent) text-lg text-(--st-accent)"
+              >
+                {o.marca ?? <Icon name="users" className="size-5" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold">{o.nombre}</span>
+                {o.detalle ? <span className="block text-sm text-(--st-muted)">{o.detalle}</span> : null}
+              </span>
+              <Icon name="chevronRight" className="size-5 shrink-0 text-(--st-muted)" />
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Aviso para servicios con `requiereConsulta` (ej. color: depende del largo y del estado del pelo). */
+export function NotaConsulta({ texto }: { texto: string }) {
+  return (
+    <p className="flex items-start gap-2 text-sm text-(--st-muted)">
+      <Icon name="info" className="mt-0.5 size-4 shrink-0 text-(--st-accent)" />
+      <span>{texto}</span>
+    </p>
+  );
+}
+
 /* ---------- Servicio ---------- */
 
 export function ServicioStep({
   categorias,
   selectedId,
   showEjemploNote,
+  notaConsulta,
   onSelect,
 }: {
   categorias: StudioCategoria[];
   selectedId: string | null;
   showEjemploNote: boolean;
+  /** Se muestra debajo de los servicios con `requiereConsulta`. */
+  notaConsulta?: string;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -110,7 +172,12 @@ export function ServicioStep({
                     aria-pressed={selected}
                     className={`${card} flex min-h-16 items-center justify-between gap-3 ${selected ? cardSelected : ""}`}
                   >
-                    <span className="font-semibold">{s.nombre}</span>
+                    <span className="min-w-0">
+                      <span className="block font-semibold">{s.nombre}</span>
+                      {s.requiereConsulta && notaConsulta ? (
+                        <span className="mt-0.5 block text-sm text-(--st-muted)">{notaConsulta}</span>
+                      ) : null}
+                    </span>
                     <span className="inline-flex shrink-0 items-center gap-1 text-sm text-(--st-muted)">
                       <Icon name="clock" className="size-4" />
                       {formatMinutes(s.duracionMin)}
@@ -276,10 +343,13 @@ function capitalizeFirst(text: string) {
 
 export function DatosStep({
   summary,
+  hint,
   initial,
   onSubmit,
 }: {
   summary: ReactNode;
+  /** Ayuda debajo del campo WhatsApp. */
+  hint: string;
   initial: { nombre: string; telefono: string };
   onSubmit: (data: { nombre: string; telefono: string }) => void;
 }) {
@@ -324,7 +394,7 @@ export function DatosStep({
       <Field
         id="telefono"
         label="Tu WhatsApp"
-        hint="Con código de área, sin 0 ni 15 (igual los aceptamos)."
+        hint={hint}
         error={touched ? telError : undefined}
         input={
           <input

@@ -4,6 +4,25 @@ import type { StudioCategoria, StudioDemoConfig, StudioExtra, StudioSede, Studio
 /** Intervalo en minutos desde la medianoche, [inicio, fin). */
 export type Interval = { start: number; end: number };
 
+export type StudioFlowStep = "sede" | "servicio" | "extras" | "profesional" | "agenda" | "datos" | "confirmacion" | "listo";
+
+/**
+ * Pasos de la reserva según la config: "sede" solo con más de una sede, "extras" solo si hay
+ * extras y "profesional" solo si hay profesionales.
+ */
+export function studioFlow(config: StudioDemoConfig): StudioFlowStep[] {
+  return [
+    ...(config.sedes.length > 1 ? (["sede"] as const) : []),
+    "servicio",
+    ...(config.extras.length > 0 ? (["extras"] as const) : []),
+    ...(config.profesionales?.length ? (["profesional"] as const) : []),
+    "agenda",
+    "datos",
+    "confirmacion",
+    "listo",
+  ];
+}
+
 export type ServicioConCategoria = StudioServicio & { categoria: StudioCategoria };
 
 export function findServicio(config: StudioDemoConfig, id: string | null): ServicioConCategoria | undefined {
@@ -71,14 +90,32 @@ export function slotsForDate(input: AgendaInput & { date: LocalDate }): Slot[] {
 
 /** Los próximos `days` días (desde hoy) con cuántos horarios libres tiene cada uno. */
 export function dayOptions(
-  input: AgendaInput & { days: number; busyFor: (date: LocalDate) => Interval[] },
+  input: AgendaInput & {
+    days: number;
+    busyFor: (date: LocalDate) => Interval[];
+    /** Si está, reemplaza el cálculo de horarios del día (ej. "Sin preferencia"). */
+    slotsFor?: (date: LocalDate) => Slot[];
+  },
 ): DayOption[] {
   return Array.from({ length: input.days }, (_, i) => {
     const date = addDaysLocal(input.today, i);
     const open = input.sede.horarios[weekdayOf(date)] !== null;
-    const freeSlots = open ? slotsForDate({ ...input, date, busy: input.busyFor(date) }).filter((s) => s.free).length : 0;
+    const slots = input.slotsFor ? input.slotsFor(date) : slotsForDate({ ...input, date, busy: input.busyFor(date) });
+    const freeSlots = open ? slots.filter((s) => s.free).length : 0;
     return { date, open, freeSlots };
   });
+}
+
+/**
+ * "Sin preferencia": unión de los horarios de varios profesionales.
+ * Un horario está libre si al menos uno lo tiene libre.
+ */
+export function mergeSlots(lists: Slot[][]): Slot[] {
+  const byTime = new Map<string, boolean>();
+  for (const list of lists) for (const s of list) byTime.set(s.time, (byTime.get(s.time) ?? false) || s.free);
+  return [...byTime.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([time, free]) => ({ time, free }));
 }
 
 /** "jueves 16/10" */
@@ -92,7 +129,9 @@ export function servicioLabel(servicio: StudioServicio, extras: StudioExtra[]): 
 }
 
 export type ConfirmMessageInput = {
-  sede: string;
+  /** Vacío en negocios con una sola sede. */
+  sede?: string;
+  profesional?: string;
   servicio: string;
   dia: string;
   hora: string;
@@ -100,7 +139,9 @@ export type ConfirmMessageInput = {
 };
 
 export function buildConfirmMessage(i: ConfirmMessageInput): string {
-  return `Hola! Reservé mi turno por la web en la sede ${i.sede}: ${i.servicio} el ${i.dia} a las ${i.hora}. Soy ${i.nombre}.`;
+  const donde = i.sede ? ` en la sede ${i.sede}` : "";
+  const con = i.profesional ? ` con ${i.profesional}` : "";
+  return `Hola! Reservé mi turno por la web${donde}: ${i.servicio}${con} el ${i.dia} a las ${i.hora}. Soy ${i.nombre}.`;
 }
 
 export function mapsUrl(direccion: string): string {

@@ -63,3 +63,13 @@ html:has(.studio-root) body {
   outline: 3px solid var(--st-text);
   outline-offset: 2px;
 }
+
+/* Wordmark en texto (ej. "JESÚS"): tipografía display condensada, un poco más de aire entre letras. */
+.studio-root .st-wordmark {
+  letter-spacing: 0.04em;
+}
+
+/* Con wordmark la display es condensada (ej. Anton): sin espaciado negativo en los títulos. */
+.studio-root[data-marca="wordmark"] .st-display:not(.st-wordmark) {
+  letter-spacing: 0.01em;
+}
